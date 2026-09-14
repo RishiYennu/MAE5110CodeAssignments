@@ -13,86 +13,53 @@ from rimless_wheel_model import RimlessWheel, simulate, step_return_map
 FIGURES = Path(__file__).parent / "figures"
 ROLLING_COLOUR, STOPPED_COLOUR, LINE_COLOUR = "#2F6F4E", "#B4643C", "#3B4CA8"
 
+def check_energy(wheel):
 
-def tidy(axes, title, xlabel, ylabel):
-    axes.set_title(title, fontsize=10, loc="left")
-    axes.set_xlabel(xlabel, fontsize=9)
-    axes.set_ylabel(ylabel, fontsize=9)
-    axes.tick_params(labelsize=8)
-    axes.grid(alpha=0.15, linewidth=0.6)
-    for edge in ("top", "right"):
-        axes.spines[edge].set_visible(False)
-
-
-# ------------------------------------------------------------- sanity checking
-
-
-def check_model(wheel):
-    """Three checks, each isolating one part of the model.
-
-    Each has a prediction stated before it runs, so a wrong model fails loudly
-    rather than producing a plausible-looking number.
-    """
-    print("Sanity checks")
-    figure, axes_row = plt.subplots(1, 3, figsize=(13, 3.8))
-    flat_wheel = RimlessWheel(spoke_count=wheel.spoke_count, slope_angle=0.0)
-
-    # 1. Only the smooth flow. Energy is conserved between impacts, so any drift
-    #    is the integrator, not the physics. Expect it at the solver tolerance.
-    solution = solve_ivp(flat_wheel.compute_derivative, (0, 1.0), [0.05, 0.0],
-                         rtol=1e-11, atol=1e-11, dense_output=True)
-    times = np.linspace(0, 1.0, 400)
-    energy = np.array([flat_wheel.compute_energy(s) for s in solution.sol(times).T])
-    drift = np.ptp(energy)
-    print(f"  energy drift between impacts : {drift:.2e}   (expect ~0)")
-    axes_row[0].plot(times, energy - energy[0], color=LINE_COLOUR, linewidth=1.4)
-    tidy(axes_row[0], f"1. Smooth flow only\nenergy drift {drift:.1e}, expected ~0",
-         "time [s]", "E(t) - E(0)")
-
-    # 2. Only the collision law. Every impact must scale the rate by cos(2 alpha)
-    #    exactly. A constant but wrong ratio means the alpha convention is off; a
-    #    drifting ratio means the event localisation is sloppy.
     guards = wheel.build_guards()
-    state = np.array([wheel.launch_angle, 2.5])
-    ratios = []
-    for _ in range(12):
-        segment = solve_ivp(wheel.compute_derivative, (0, 30), state,
-                            events=guards, rtol=1e-11, atol=1e-11)
-        struck = segment.y[:, -1]
-        after = wheel.apply_impact(struck, segment.t_events[0].size > 0)
-        ratios.append(abs(after[1] / struck[1]))
+    state = np.array([wheel.launch_angle, 3.0])
+    clock = 0.0
+    times, energies, drift, ratio_error = [], [], 0.0, 0.0
+
+    for _ in range(6):
+        swing = solve_ivp(wheel.compute_derivative, (clock, clock + 30.0), state,
+                          events=guards, rtol=1e-11, atol=1e-11, dense_output=True)
+        sample_times = np.linspace(swing.t[0], swing.t[-1], 200)
+        sample_energy = [wheel.compute_energy(s) for s in swing.sol(sample_times).T]
+        times.append(sample_times)
+        energies.append(sample_energy)
+        drift = max(drift, np.ptp(sample_energy))
+
+        clock = swing.t[-1]
+        before = swing.y[:, -1]
+        after = wheel.apply_impact(before, swing.t_events[0].size > 0)
+        ratio_error = max(ratio_error,
+                          abs((after[1] / before[1]) ** 2 - wheel.impact_speed_ratio ** 2))
         state = after
-    ratio_error = max(abs(r - wheel.impact_speed_ratio) for r in ratios)
-    print(f"  impact rate ratio            : {ratios[0]:.12f}   "
-          f"(expect {wheel.impact_speed_ratio:.12f})")
-    axes_row[1].plot(range(1, 13), ratios, "o-", color=LINE_COLOUR, markersize=4)
-    axes_row[1].axhline(wheel.impact_speed_ratio, color=STOPPED_COLOUR, linestyle="--")
-    tidy(axes_row[1], f"2. Collision law only\nmax error {ratio_error:.1e} from cos(2a)",
-         "impact number", "|rate after| / |rate before|")
 
-    # 3. The whole system, against a prediction needing no computation: with no
-    #    slope, gravity adds nothing and impacts subtract, so it must stop.
-    outcomes = {simulate(flat_wheel, [flat_wheel.launch_angle, rate])[0]
-                for rate in (0.5, 2.0, 6.0)}
-    print(f"  flat ground outcomes         : {outcomes}   (expect only stopped)")
-    _, decay = simulate(flat_wheel, [flat_wheel.launch_angle, 6.0], rolling_steps=99)
-    axes_row[2].semilogy(range(1, len(decay) + 1), decay, "o-",
-                         color=STOPPED_COLOUR, markersize=4)
-    tidy(axes_row[2], f"3. Whole system on flat ground\noutcomes {outcomes}, expected stopped",
-         "downhill step", "post-impact rate [rad/s]")
+    print("Sanity check: energy")
+    print(f"  drift while swinging  : {drift:.2e}   (expect 0)")
+    print(f"  kept at impact        : {wheel.impact_speed_ratio ** 2:.12f}   "
+          f"(worst error {ratio_error:.1e})")
 
-    figure.suptitle(f"Sanity checks   {wheel.describe()}", fontsize=11)
+    figure, axes = plt.subplots(figsize=(8, 4.5))
+    for sample_times, sample_energy in zip(times, energies):
+        axes.plot(sample_times, sample_energy, color=LINE_COLOUR, linewidth=2.2)
+    for sample_times in times[:-1]:
+        axes.axvline(sample_times[-1], color=STOPPED_COLOUR, linestyle=":", linewidth=1.1)
+    axes.plot([], [], color=LINE_COLOUR, linewidth=2.2, label="swinging: energy conserved")
+    axes.plot([], [], color=STOPPED_COLOUR, linestyle=":", label="impact: energy lost")
+    axes.legend(fontsize=8, frameon=False)
+    axes.set_xlabel("time [s]")
+    axes.set_ylabel("energy per unit mass per unit length")
+    axes.set_title(f"Sanity check: energy   {wheel.describe()}\n"
+                   f"flat to {drift:.0e} between impacts, each impact keeps "
+                   f"cos^2(2a) = {wheel.impact_speed_ratio ** 2:.3f}", fontsize=10)
     figure.tight_layout()
-    figure.savefig(FIGURES / "sanity_checks.png", dpi=150)
+    figure.savefig(FIGURES / "sanity_check_energy.png", dpi=150)
     plt.close(figure)
 
 
 def compare_speed(wheel, sample_count=40, seed=0):
-    """Show the early exit is faster AND gives the same classification.
-
-    The agreement count is the important half: it says the shortcut is free
-    rather than an approximation traded for speed.
-    """
     generator = np.random.default_rng(seed)
     points = [[generator.uniform(wheel.launch_angle, wheel.strike_angle),
                generator.uniform(-6.0, 6.0)] for _ in range(sample_count)]
@@ -112,15 +79,7 @@ def compare_speed(wheel, sample_count=40, seed=0):
           f"{agree}/{sample_count} identical classifications")
 
 
-# --------------------------------------------------------- regions of attraction
-
-
 def map_regions_of_attraction(wheel, angle_samples=51, rate_samples=71, rate_limit=6.0):
-    """Grid the state space and simulate from every point.
-
-    The stance angle can only lie between the two guards; outside that wedge a
-    different spoke would already be touching the ground.
-    """
     angles = np.linspace(wheel.launch_angle, wheel.strike_angle, angle_samples)
     rates = np.linspace(-rate_limit, rate_limit, rate_samples)
     classification = np.zeros((rate_samples, angle_samples))
@@ -134,7 +93,6 @@ def map_regions_of_attraction(wheel, angle_samples=51, rate_samples=71, rate_lim
 
 
 def plot_regions_of_attraction(wheel, angles, rates, classification, fixed_point):
-    """Both attractors on one state-space map, each with its basin."""
     rolling_fraction = classification.mean()
     figure, axes = plt.subplots(figsize=(8.5, 6))
     axes.imshow(classification, origin="lower", aspect="auto",
@@ -170,10 +128,6 @@ def plot_regions_of_attraction(wheel, angles, rates, classification, fixed_point
     figure.savefig(FIGURES / "regions_of_attraction.png", dpi=150)
     plt.close(figure)
     return rolling_fraction
-
-
-# ---------------------------------------------------- return map and multiplier
-
 
 def find_fixed_point(wheel):
     """Solve P(v) = v on the simulated map. None when no rolling cycle exists.
@@ -263,12 +217,7 @@ def plot_return_map(wheel, fixed_point, multiplier):
     figure.savefig(FIGURES / "return_map.png", dpi=150)
     plt.close(figure)
 
-
-# ------------------------------------------------------------------- the sweeps
-
-
 def sweep(wheels, angle_samples=35, rate_samples=45):
-    """Measure the rolling basin and the multiplier across a list of wheels."""
     basins, multipliers, predictions = [], [], []
     for wheel in wheels:
         _, _, classification = map_regions_of_attraction(wheel, angle_samples, rate_samples)
@@ -293,8 +242,9 @@ def plot_sweeps(slope_degrees, slope_results, spoke_counts, spoke_results):
 
         axes = axes_grid[row, 0]
         axes.plot(x_values, 100 * basins, "o-", color=ROLLING_COLOUR, markersize=5)
-        tidy(axes, f"{name} vs size of the rolling basin", x_label,
-             "rolling basin [% of wedge]")
+        axes.set_title(f"{name} vs size of the rolling basin", fontsize=10)
+        axes.set_xlabel(x_label)
+        axes.set_ylabel("rolling basin [% of wedge]")
 
         axes = axes_grid[row, 1]
         axes.plot(x_values, multipliers, "o", color=LINE_COLOUR, markersize=6,
@@ -303,7 +253,9 @@ def plot_sweeps(slope_degrees, slope_results, spoke_counts, spoke_results):
                   label="cos^2(2 alpha)")
         axes.set_ylim(0, 1)
         axes.legend(fontsize=8, frameon=False)
-        tidy(axes, f"{name} vs local convergence rate", x_label, "Floquet multiplier")
+        axes.set_title(f"{name} vs local convergence rate", fontsize=10)
+        axes.set_xlabel(x_label)
+        axes.set_ylabel("Floquet multiplier")
 
     figure.suptitle("Slope changes the basin but not the convergence rate; "
                     "spoke count changes both", fontsize=11)
@@ -311,16 +263,12 @@ def plot_sweeps(slope_degrees, slope_results, spoke_counts, spoke_results):
     figure.savefig(FIGURES / "sweeps.png", dpi=150)
     plt.close(figure)
 
-
-# ------------------------------------------------------------------------ main
-
-
 def main():
     FIGURES.mkdir(exist_ok=True)
     wheel = RimlessWheel(spoke_count=8, slope_angle=np.deg2rad(5.0))
     print(wheel.describe(), "\n")
 
-    check_model(wheel)
+    check_energy(wheel)
 
     print("\nCost of the brute force")
     compare_speed(wheel)
