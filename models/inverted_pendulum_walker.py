@@ -9,24 +9,87 @@ import numpy as np
 
 
 def generate_params():
-    pass
+    params = {
+        "gravity": 9.81,  # gravity (m/s^2)
+        "length": 1.0,  # leg length, foot to hub (m)
+        "mass": 1.0,  # point mass at the hub (kg)
+        "incline": 0.06,  # downhill slope of the ground (rad)
+        "angle_of_attack": np.pi / 8,  # half the angle between the legs (rad)
+        "ankle_torque": 0.0,  # torque about the stance foot (N m)
+    }
+
+    return params
+
+
+def find_touchdown_angle(params):
+    # The swing foot sits on the ground when cos(theta - incline) equals
+    # cos(theta - 2*angle_of_attack - incline)
+
+    touchdown_angle = params["incline"] + params["angle_of_attack"]
+
+    return touchdown_angle
 
 
 def dynamics(t, state, params):
-    # TODO: implement the state derivative.
-    return np.array([0.0, 0.0])
+
+    gravity = params["gravity"]
+    length = params["length"]
+    mass = params["mass"]
+    ankle_torque = params["ankle_torque"]
+
+    angle = state[0]
+    angular_velocity = state[1]
+
+    angular_acceleration = (gravity / length) * np.sin(angle) + ankle_torque / (
+        mass * length**2
+    )
+
+    state_derivative = np.array([angular_velocity, angular_acceleration])
+
+    return state_derivative
 
 
 def event_guard(previous_state, next_state, params):
-    pass
+    # True on the timestep that carries the stance leg past the touchdown angle
+
+    touchdown_angle = find_touchdown_angle(params)
+
+    stepped_past_touchdown = previous_state[0] < touchdown_angle <= next_state[0]
+
+    return stepped_past_touchdown
 
 
 def event_dynamics(state, params):
-    pass
+
+    angle_of_attack = params["angle_of_attack"]
+    leg_spacing = 2 * angle_of_attack
+
+    angle = state[0]
+    angular_velocity = state[1]
+
+    post_impact_state = np.array(
+        [angle - leg_spacing, angular_velocity * np.cos(leg_spacing)]
+    )
+
+    return post_impact_state
 
 
 def calculate_energy(state, params):
-    pass
+    # Total mechanical energy of the point mass, measured about the stance foot.
+
+    gravity = params["gravity"]
+    length = params["length"]
+    mass = params["mass"]
+
+    angle = state[0]
+    angular_velocity = state[1]
+
+    kinetic_energy = 0.5 * mass * length**2 * angular_velocity**2
+    potential_energy = mass * gravity * length * np.cos(angle)
+
+    total_energy = kinetic_energy + potential_energy
+
+    return total_energy
 
 
 def visualize(
