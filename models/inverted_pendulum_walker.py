@@ -9,24 +9,62 @@ import numpy as np
 
 
 def generate_params():
-    pass
-
+    params = {
+            "gravity": 9.81,
+            "incline": 0.06,  
+            "length": 1, # m
+            "angle_of_attack": np.pi/8,  
+            "ankle_torque": 0,  
+            "mass" : 0.1 # kg
+        }
+    params["min_ankle_torque"] = -0.1 * params["mass"] * params["gravity"] * params["length"]
+    params["max_ankle_torque"] = 0.05 * params["mass"] * params["gravity"] * params["length"]
+    params["min_angle_of_attack"] = np.pi/8
+    params["max_angle_of_attack"] = np.pi/7
+    return params
 
 def dynamics(t, state, params):
-    # TODO: implement the state derivative.
-    return np.array([0.0, 0.0])
+    length = params["length"]
+    ankle_torque = params["ankle_torque"]
+    gravity = params["gravity"]
+    mass = params["mass"]
+
+    angle = state[0]
+    angular_velocity = state[1]
+
+    angular_acceleration = (gravity / length) * np.sin(angle) + (ankle_torque / (mass * length**2))
+
+    return np.array([angular_velocity, angular_acceleration])
 
 
 def event_guard(previous_state, next_state, params):
-    pass
+    angle_of_attack = params["angle_of_attack"]
+    incline = params["incline"]
+    touchdown_angle = incline + angle_of_attack
+
+    return bool(previous_state[0] < touchdown_angle and next_state[0] >= touchdown_angle)
 
 
 def event_dynamics(state, params):
-    pass
+    angle_of_attack = params["angle_of_attack"]
+    incline = params["incline"]
 
+    new_angle = incline - angle_of_attack
+    new_angular_velocity = state[1] * np.cos(2 * angle_of_attack)
+    return np.array([new_angle, new_angular_velocity])
 
 def calculate_energy(state, params):
-    pass
+    gravity = params["gravity"]
+    length = params["length"]
+    mass = params["mass"]
+
+    angle = state[0]  
+    angular_velocity = state[1]
+
+    kinetic_energy = 0.5 * mass * (length * angular_velocity) ** 2
+    potential_energy = mass * gravity * length * np.cos(angle)
+    return kinetic_energy + potential_energy
+
 
 
 def visualize(
