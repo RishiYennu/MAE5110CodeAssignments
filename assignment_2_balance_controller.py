@@ -14,33 +14,21 @@ from matplotlib.patches import Patch
 from integrators.rk4_events import rk4_step
 from models import inverted_pendulum_walker as model
 
-# Ankle torque bounds, as fractions of the weight torque m*g*L. The assignment sets
-# these; they are asymmetric, so the walker can brake a forward lean twice as hard as
-# it can catch a backward one.
+# Ankle torque bounds, as fractions of the weight torque m*g*L.
 MIN_TORQUE_FRACTION = -0.10
 MAX_TORQUE_FRACTION = 0.05
 
-# Angle of attack bounds, also set by the assignment. Only the widest one is used here,
-# to frame the range of angles the stance leg can ever occupy.
+# Angle of attack bounds
 MIN_ANGLE_OF_ATTACK = np.pi / 8
 MAX_ANGLE_OF_ATTACK = np.pi / 7
 
 # Closed-loop gains, for the linear system left behind once gravity is cancelled:
 # theta_ddot = -BALANCE_STIFFNESS * theta - BALANCE_DAMPING * theta_dot.
-#
-# These are critically damped, and the choice matters less than it looks. Measured
-# against the largest capture band any bounded-torque controller could reach, gains
-# from stiffness 6 through 16 all attain it to within one grid cell. Weaker gains fall
-# 0.41 rad/s short because they never saturate hard enough to brake; much stiffer ones
-# fall 0.24 rad/s short because they saturate on position error and spend the authority
-# they needed for braking. The region of attraction belongs to the ankle bounds, not to
-# the gains.
 BALANCE_STIFFNESS = 9.0
 BALANCE_DAMPING = 6.0
 
-# Grid used to measure the region of attraction. 161x161 puts the grid's own resolution
-# (0.025 rad/s) at about a twentieth of the band's width and takes ~1.5 s to build; the
-# error is exactly one cell at every resolution tried, so this is a straight cost trade.
+# Grid used to measure the region of attraction. 161x161 locates the edge to 5.3% 
+# of the band's width
 N_ANGLES = 161
 N_VELOCITIES = 161
 MAX_BALANCE_VELOCITY = 2.0
@@ -68,8 +56,7 @@ def torque_limits(params):
 
 def compute_ankle_torque(state, params):
     # Feedback linearization. The first term cancels gravity exactly, which would leave
-    # theta_ddot = -stiffness*theta - damping*velocity; the clip is what stops it being
-    # that simple, since the ankle cannot always supply the cancelling torque.
+    # theta_ddot = -stiffness*theta - damping*velocity
 
     gravity = params["gravity"]
     length = params["length"]
@@ -130,10 +117,6 @@ def capture_band_edges(angles, params):
     # The largest set of states any controller respecting the ankle bounds could bring
     # to a standstill, bounded by the hardest-braking curve into the most forward angle
     # the ankle can hold and the hardest-pushing curve into the most backward one.
-    #
-    # This is a yardstick, not the guard: it is an upper bound on what the PD above can
-    # do, so comparing it against the measured grid says whether the grid is merely
-    # resolution-limited or actually wrong.
 
     min_angle, max_angle = sustainable_angles(params)
     min_torque, max_torque = torque_limits(params)
@@ -152,10 +135,6 @@ def classify_balance_states(
     settle_time=BALANCE_SETTLE_TIME,
 ):
     # Run the closed loop from every state at once and see which ones end up upright.
-    #
-    # The torque is recomputed once per timestep and held across the four RK4 stages,
-    # which is not a convenience: it is how the controller actually runs from the
-    # experiment script, so the grid measures the controller that will be flown.
 
     balance_params = dict(params)
 
@@ -188,7 +167,6 @@ def build_region_of_attraction(
 ):
     # Measures the region of attraction and hands back the axes alongside it, so the
     # guard can index into the grid and the plot can draw it without classifying twice.
-    #
     # The angle range is every angle the stance leg can occupy, for the widest angle of
     # attack allowed. The velocity range is chosen to frame the result: the captured set
     # never reaches 1.75 rad/s anywhere in that angle range.
@@ -210,11 +188,6 @@ def build_region_of_attraction(
 
 def is_in_region_of_attraction(state, region_of_attraction):
     # The event guard: has the walker reached a state the ankle controller can catch?
-    #
-    # Nearest-cell lookup into the measured grid. Anything off the grid is outside by
-    # definition, and rounding to the nearest cell means a state up to half a cell
-    # (0.0125 rad/s at the default resolution) beyond the true edge can still read as
-    # inside -- the price of reading the answer off a grid rather than a formula.
 
     angles, velocities, reaches_upright = region_of_attraction
 

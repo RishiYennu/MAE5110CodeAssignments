@@ -21,13 +21,18 @@ def generate_params():
     return params
 
 
-def find_touchdown_angle(params):
-    # The swing foot sits on the ground when cos(theta - incline) equals
-    # cos(theta - 2*angle_of_attack - incline)
+def find_step_displacement(params):
+    # Foot-to-foot vector at a footstrike: both feet sit on the ground with the hub a leg
+    # length from each, so they are 2*L*sin(alpha) apart along the downhill direction.
 
-    touchdown_angle = params["incline"] + params["angle_of_attack"]
+    step_displacement = (
+        2
+        * params["length"]
+        * np.sin(params["angle_of_attack"])
+        * np.array([np.cos(params["incline"]), -np.sin(params["incline"])])
+    )
 
-    return touchdown_angle
+    return step_displacement
 
 
 def dynamics(t, state, params):
@@ -50,9 +55,11 @@ def dynamics(t, state, params):
 
 
 def event_guard(previous_state, next_state, params):
-    # True on the timestep that carries the stance leg past the touchdown angle
+    # True on the timestep that carries the stance leg past the touchdown angle. The swing
+    # foot sits on the ground when cos(theta - incline) equals
+    # cos(theta - 2*angle_of_attack - incline), which puts touchdown here:
 
-    touchdown_angle = find_touchdown_angle(params)
+    touchdown_angle = params["incline"] + params["angle_of_attack"]
 
     stepped_past_touchdown = previous_state[0] < touchdown_angle <= next_state[0]
 
