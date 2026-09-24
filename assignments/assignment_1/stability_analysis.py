@@ -242,9 +242,9 @@ def plot_sweeps(slope_degrees, slope_results, spoke_counts, spoke_results):
 
         axes = axes_grid[row, 0]
         axes.plot(x_values, 100 * basins, "o-", color=ROLLING_COLOUR, markersize=5)
-        axes.set_title(f"{name} vs size of the rolling basin", fontsize=10)
+        axes.set_title(f"{name} vs size of the region of attraction", fontsize=10)
         axes.set_xlabel(x_label)
-        axes.set_ylabel("rolling basin [% of wedge]")
+        axes.set_ylabel("region of attraction [% of wedge]")
 
         axes = axes_grid[row, 1]
         axes.plot(x_values, multipliers, "o", color=LINE_COLOUR, markersize=6,
@@ -286,7 +286,7 @@ def main():
     angles, rates, classification = map_regions_of_attraction(wheel)
     rolling_fraction = plot_regions_of_attraction(wheel, angles, rates,
                                                   classification, fixed_point)
-    print(f"  rolling basin covers {100 * rolling_fraction:.1f}% of the wedge")
+    print(f"  region of attraction covers {100 * rolling_fraction:.1f}% of the wedge")
 
     print("\nSweeping the slope")
     slope_degrees = np.arange(4.0, 21.0, 2.0)
