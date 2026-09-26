@@ -29,6 +29,10 @@ def generate_params():
     return params
 
 
+def generate_initial_condition():
+    return np.array([0.0, 0.0])
+
+
 def calculate_energy(state, params):
     """Compute energies for a state ``(2,)`` or trajectory ``(2, N)``."""
     gravity = params["gravity"]
