@@ -11,7 +11,9 @@ def test_constant_derivative():
         return params["velocity"]
 
     params = {"velocity": np.array([2.0, -3.0])}
-    for name, integrator in inspect.getmembers(integrators, inspect.isfunction):
+    integrator_functions = inspect.getmembers(integrators, inspect.isfunction)
+    assert integrator_functions, "No integrator functions exported"
+    for name, integrator in integrator_functions:
         state = np.array([1.0, 4.0])
         result = integrator(dynamics, 2.0, state, 0.25, params)
 
