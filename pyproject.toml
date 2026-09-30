@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "mae5110"
 version = "0.1.0"
@@ -15,3 +19,11 @@ dependencies = [
 dev = [
     "pytest",
 ]
+notebooks = [
+    "marimo>=0.25",
+    "jupytext",
+]
+
+[tool.setuptools]
+packages = ["models", "algorithms"]
+package-dir = {"" = "."}
