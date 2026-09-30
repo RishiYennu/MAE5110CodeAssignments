@@ -6,3 +6,7 @@ __pycache__/
 .pytest_cache/
 uv.lock
 assignments_tex/
+
+# Assignment 2 figures, numerical tables, and compiled report are reproducible.
+output/
+tmp/pdfs/
