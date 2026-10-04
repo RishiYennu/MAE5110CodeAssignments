@@ -19,8 +19,8 @@ from models import pendulum as model
 # %% Parameters and grid
 params = model.generate_params()
 initial_state = np.array([-np.pi, 0.0])  # start hanging down, at rest
-timestep = 0.01  # integration substep (s)
-control_steps = 4  # hold each torque for 0.04 s
+timestep = 0.01  # integration substep (seconds)
+control_steps = 4  # hold each torque for 0.04 seconds
 sim_time = 20.0  # seconds
 discount = 0.99
 SAVE_GIF = False  # Exporting every animation frame takes several seconds.
