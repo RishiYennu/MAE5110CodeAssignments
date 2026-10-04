@@ -1,4 +1,5 @@
 import numpy as np
+from types import SimpleNamespace
 
 # Step cap for event-to-event integration. Measured on the walker, post-impact
 # velocity error against the closed-form result, with the dynamics calls it costs:
@@ -124,7 +125,14 @@ def step_through_impacts(t, state, timestep, model, params, max_impacts):
 
 
 def rk4_with_events(
-    initial_state, timestep, sim_time, model, params, max_impacts_per_step=100
+    dynamics,
+    time,
+    state,
+    timestep,
+    params,
+    event_guard=None,
+    event_dynamics=None,
+    max_impacts_per_step=100,
 ):
     # Integrate with impacts, sampling the trajectory every `timestep`.
     #
@@ -134,19 +142,17 @@ def rk4_with_events(
     # prefer a coarse grid -- 1e-4 costs 500x more than 1e-2 and buys nothing.
     # Keep the interval at or below DEFAULT_MAX_TIMESTEP for accurate impact timing.
 
-    require_event_model(model)
+    if event_guard is None and event_dynamics is None:
+        return rk4_step(time, state, timestep, SimpleNamespace(dynamics=dynamics), params)
 
-    n_timesteps = int(sim_time / timestep) + 1
-    time_traj = np.arange(n_timesteps) * timestep
-    state_traj = np.zeros((2, n_timesteps))
-    state_traj[:, 0] = initial_state
+    if event_guard is None or event_dynamics is None:
+        raise ValueError("pass both event_guard and event_dynamics, or neither")
 
-    for step, t in enumerate(time_traj[:-1]):
-        state_traj[:, step + 1] = step_through_impacts(
-            t, state_traj[:, step], timestep, model, params, max_impacts_per_step
-        )
+    model = SimpleNamespace(
+        dynamics=dynamics, event_guard=event_guard, event_dynamics=event_dynamics
+    )
+    return step_through_impacts(time, state, timestep, model, params, max_impacts_per_step)
 
-    return time_traj, state_traj
 
 
 def integrate_to_next_impact(
@@ -187,3 +193,21 @@ def integrate_to_next_impact(
         elapsed_time += timestep
 
     return None, elapsed_time
+
+def simulate_with_events(
+    initial_state, timestep, sim_time, model, params, max_impacts_per_step=100
+):
+    require_event_model(model)
+
+    n_timesteps = int(sim_time / timestep) + 1
+    time_traj = np.arange(n_timesteps) * timestep
+    state_traj = np.zeros((len(initial_state), n_timesteps))
+    state_traj[:, 0] = initial_state
+
+    for step, t in enumerate(time_traj[:-1]):
+        state_traj[:, step + 1] = rk4_with_events(
+            model.dynamics, t, state_traj[:, step], timestep, params,
+            model.event_guard, model.event_dynamics, max_impacts_per_step,
+        )
+
+    return time_traj, state_traj

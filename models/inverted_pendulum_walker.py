@@ -263,3 +263,14 @@ def visualize(
     )
     ax.set_aspect("equal", adjustable="box")
     return ax
+
+def generate_initial_condition(params=None):
+    # Start just after a footstrike: the new stance leg sits at the post-impact
+    
+    if params is None:
+        params = generate_params()
+
+    angle = params["incline"] - params["angle_of_attack"]
+    angular_velocity = 1.5
+
+    return np.array([angle, angular_velocity])

@@ -93,3 +93,17 @@ def generate_params():
         "slope": 0.2,  # angle of slop to ground (rad)
     }
     return params
+
+
+def generate_initial_condition(params=None):
+    
+    if params is None:
+        params = generate_params()
+
+
+    _, trailing_angle, _ = stance_geometry(params)
+
+    angle = trailing_angle + 1e-6 
+    angular_velocity = 1.2 * speed_to_clear_apex(params)
+
+    return np.array([angle, angular_velocity])
