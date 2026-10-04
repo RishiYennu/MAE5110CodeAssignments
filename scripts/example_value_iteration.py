@@ -5,8 +5,7 @@
 # Build a transition matrix, solve for a torque policy, and simulate the
 # continuous pendulum using that policy.
 
-# %% 
-# Imports
+# %% Imports
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -17,13 +16,12 @@ from algorithms import build_transition_matrix, value_iteration
 from integrators import rk4 as integrator
 from models import pendulum as model
 
-# %% 
-# Parameters and grid
+# %% Parameters and grid
 params = model.generate_params()
 initial_state = np.array([-np.pi, 0.0])  # start hanging down, at rest
 timestep = 0.01  # integration substep (s)
 control_steps = 4  # hold each torque for 0.04 s
-sim_time = 20.0  # s
+sim_time = 20.0  # seconds
 discount = 0.99
 SAVE_GIF = False  # Exporting every animation frame takes several seconds.
 
@@ -38,8 +36,7 @@ points = grid_points.reshape(-1, 2)
 lower = points.min(axis=0)
 upper = points.max(axis=0)
 
-# %% 
-# Build the transition matrix
+# %% Build the transition matrix
 def step(state, torque):
     """Advance one control interval with constant torque, wrapping the angle."""
     step_params = params.copy()
@@ -62,8 +59,7 @@ reward[upright] = 1.0  # the same state reward for every action
 
 value, policy = value_iteration(transition_matrix, reward, discount=discount)
 
-# %% 
-# Simulate the policy on the continuous pendulum
+# %% Simulate the policy on the continuous pendulum 
 if np.any(initial_state < lower) or np.any(initial_state > upper):
     raise ValueError("Choose an initial state inside the grid domain.")
 time_traj = np.arange(round(sim_time / timestep) + 1) * timestep
@@ -87,8 +83,7 @@ for k, t in enumerate(time_traj[:-1]):
         print("Simulation stopped: the state left the grid domain.")
         break
 
-# %% 
-# Lookup chooses a torque; the simulated state is never snapped onto the grid.
+# %% Lookup chooses a torque; the simulated state is never snapped onto the grid.
 time_traj = time_traj[: k + 2]
 state_traj = state_traj[:, : k + 2]
 torque_traj = torque_traj[: k + 1]
@@ -97,8 +92,7 @@ print(
     f"angular velocity: {state_traj[1, -1]:.4f} rad/s."
 )
 
-# %% 
-# Plot the value, policy, and continuous trajectory
+# %% Plot the value, policy, and continuous trajectory
 output = Path("output/value_iteration")
 output.mkdir(parents=True, exist_ok=True)
 fig, axes = plt.subplots(2, 2, figsize=(11, 8), layout="constrained")
@@ -166,8 +160,7 @@ fig.savefig(output / "pendulum.png", dpi=180)
 print(f"Saved plots to {output / 'pendulum.png'}.")
 fig  # noqa: B018 — display the figure in the notebook
 
-# %% 
-# Animate the pendulum, with zero angle pointing upward.
+# %% Animate the pendulum, with zero angle pointing upward.
 length = params["length"]
 animation_fig, animation_axis = plt.subplots(figsize=(4, 4), layout="constrained")
 animation_axis.set(
